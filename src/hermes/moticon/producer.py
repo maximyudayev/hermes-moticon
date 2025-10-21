@@ -25,47 +25,31 @@
 #
 # ############
 
-import time
+import socket
 
-from hermes.utils.time_utils import get_time
-from hermes.utils.zmq_utils import PORT_BACKEND, PORT_KILL, PORT_SYNC_HOST
 from hermes.base.nodes.producer import Producer
+from hermes.moticon.stream import MoticonStream
+from hermes.utils.time_utils import get_time
+from hermes.utils.zmq_utils import PORT_BACKEND, PORT_SYNC_HOST, PORT_KILL, IP_LOOPBACK, PORT_MOTICON
 
-from hermes.template import TemplateStream
-
-
-class TemplateProducer(Producer):
-  """A template for user extension of the Producer behavior, generating new data relayed to the Broker for consumers.
+class MoticonProducer(Producer):
+  """A class to inteface with Moticon insole sensors.
   """
   @classmethod
   def _log_source_tag(cls) -> str:
-    # TODO: replace with unique modality identifier.
-    return 'template-producer'
+    return 'insoles'
 
 
   def __init__(self,
                host_ip: str,
                logging_spec: dict,
-               sampling_rate_hz: int = 1,
+               sampling_rate_hz: float = 100,
                port_pub: str = PORT_BACKEND,
                port_sync: str = PORT_SYNC_HOST,
                port_killsig: str = PORT_KILL,
                transmit_delay_sample_period_s: float = float('nan'),
                **_):
-    # TODO: extend the function argument footprint to user-specific function.
-    """Constructor of the TemplateProducer Node.
-
-    Args:
-        host_ip (str): IP address of the local master Broker.
-        logging_spec (dict): Mapping of Storage object parameters to user-defined configuration values.
-        sampling_rate_hz (float, optional): Expected sample rate of the device. Defaults to float('nan').
-        port_pub (str, optional): Local port to publish to for local master Broker to relay. Defaults to PORT_BACKEND.
-        port_sync (str, optional): Local port to listen to for local master Broker's startup coordination. Defaults to PORT_SYNC_HOST.
-        port_killsig (str, optional): Local port to listen to for local master Broker's termination signal. Defaults to PORT_KILL.
-        transmit_delay_sample_period_s (float, optional): Duration of the period over which to estimate propagation delay of measurements from the corresponding device. Defaults to float('nan').
-    """
-
-    # TODO: update stream specification with input arguments.
+    
     stream_out_spec = {
       "sampling_rate_hz": sampling_rate_hz
     }
@@ -81,48 +65,60 @@ class TemplateProducer(Producer):
 
 
   @classmethod
-  def create_stream(cls, stream_spec: dict) -> TemplateStream:
-    return TemplateStream(**stream_spec)
+  def create_stream(cls, stream_spec: dict) -> MoticonStream:
+    return MoticonStream(**stream_spec)
 
 
   def _ping_device(self) -> None:
-    # TODO: device-specific function wrapping round-trip communication for transmission delay estimation.
     return None
 
 
   def _connect(self) -> bool:
-    # TODO: 
+    self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    self._sock.settimeout(10)
     return True
 
 
   def _keep_samples(self) -> None:
-    # TODO: start retaining streamed samples in-memory on external trigger.
-    pass
+    # Bind the socket after nodes synced, ensures no buffering on the socket happens. 
+    self._sock.bind((IP_LOOPBACK, int(PORT_MOTICON)))
 
 
   def _process_data(self) -> None:
     if self._is_continue_capture:
-      ##################################
-      # TODO: interface the user sensor.
-      ##################################
-      time.sleep(1.0)
+      try:
+        payload, address = self._sock.recvfrom(1024) # data is whitespace-separated byte string
+      except socket.timeout:
+        print('Moticon insoles receive socket timed out on receive.', flush=True)
+        return
+
       process_time_s: float = get_time()
-      print(process_time_s, flush=True)
-      ##################################
-      ##################################
+      payload = [float(word) for word in payload.split()] # splits byte string into array of (multiple) bytes, removing whitespace separators between measurements
+
+      data = {
+        'timestamp': payload[0],
+        'toa_s': process_time_s,
+        'foot_pressure_left': payload[9:25],
+        'foot_pressure_right': payload[34:50],
+        'acc_left': payload[1:4],
+        'acc_right': payload[26:29],
+        'gyro_left': payload[4:7],
+        'gyro_right': payload[29:32],
+        'total_force_left': payload[25],
+        'total_force_right': payload[50],
+        'center_of_pressure_left': payload[7:9],
+        'center_of_pressure_right': payload[32:34],
+      }
 
       tag: str = "%s.data" % self._log_source_tag()
-      # TODO: match data keys to device and substream names of the Stream object.
-      self._publish(tag, process_time_s=process_time_s, data={'<device-name>': {'toa': process_time_s}})
+      self._publish(tag, process_time_s=process_time_s, data={'insoles-data': data})
     else:
       self._send_end_packet()
 
 
   def _stop_new_data(self):
-    # TODO: trigger the sensor's backend to stop generating new data.
-    pass
+    self._sock.close()
 
 
   def _cleanup(self) -> None:
-    # TODO: perform device-specific clean-up.
     super()._cleanup()
