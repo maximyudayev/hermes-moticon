@@ -8,5 +8,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## HERMES Moticon
 
+### 0.0.2 <small>November 25, 2025</small>
+- Installation and Moticon software prerequisites instructions.
+
 ### 0.0.1 <small>October 21, 2025</small>
 - Initial public release of an optional Moticon OpenGO pressure insoles HERMES package.
