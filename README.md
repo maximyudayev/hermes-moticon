@@ -23,7 +23,7 @@ pip install -e hermes-moticon
 ```
 
 ## Usage
-Using the device follows the standard [configuration file specification](https://maximyudayev.github.io/hermes/) process of HERMES nodes.
+Using the device follows the standard [configuration file specification](https://yudayev.com/hermes) process of HERMES nodes.
 
 ### Desktop app
 Turn on OpenGo software on the desktop, take note of IP address. Select all desired modalities to stream out of the app over UDP to the localhost.
